@@ -1,4 +1,4 @@
-# ArcGIS-API-for-JavaScript-with-SGIS
+# ArcGIS-Maps-SDK-for-JavaScript-Demo-with-SGIS
 
 Plot for using ArcGIS API for JavaScript using Statistical Korea API.
 The WebMap display Seoul Boundary feature layer from Portal for ArcGIS and join with Statistical Korea Census Data API.
