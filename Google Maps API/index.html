@@ -1,0 +1,130 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>ArcGIS JavaScript API and Google Place API</title>
+
+    <!--Google Map Request -->
+    <script defer
+      src="https://maps.googleapis.com/maps/api/js?key=/**YOURAPIKEY**/&libraries=places&callback=googleMap">
+    </script>
+    <script defer src="https://polyfill.io/v3/polyfill.min.js?features=default"></script>
+    
+    <!--ArcGIS Map Import -->
+    <link rel="stylesheet" href="https://js.arcgis.com/4.24/esri/themes/light/main.css">
+    <script src="https://js.arcgis.com/4.24/"></script>
+
+    <!--CSS Import-->
+    <link rel="stylesheet" type="text/css" href="./style.css" />
+    
+  </head>
+  <body>
+    <script>
+      // Declare Variable for Store Data
+      var getlatitude;
+      var getlongitude;
+      var getname;
+      var arrPoint = new Object();
+        
+      /** Google Place API Request Setting **/
+      function googleMap() {
+        
+        // Google Map Initialize
+        googlemap = new google.maps.Map(document.getElementById('map'));
+
+        // Qurey Setting
+        var request = {
+          query: 'terarosa', /** Set Key Word to Search **/
+          fields: ['name', 'geometry'],
+        };
+
+        // Google Find Place Service Request 
+        var service = new google.maps.places.PlacesService(googlemap);
+        service.findPlaceFromQuery(request, function(results, status) {
+          if (status === google.maps.places.PlacesServiceStatus.OK) {
+            for (var i = 0; i < results.length; i++) {
+              getlatitude = results[i].geometry.location.lat();
+              getlongitude = results[i].geometry.location.lng();
+              getname = results[i].name;
+              
+              arrPoint[i] = { //Create points from results
+                type: "point",
+                name: getname,
+                longitude: getlongitude,
+                latitude: getlatitude
+              };
+              
+              console.log("Google Query: "+ request.query + " -> Retured Place Name: "+ getname);
+              //console.log(arrPoint[i])
+            }
+            console.log("Total Returned Object Length : " + Object.keys(arrPoint).length);
+            
+            // Forward Point Array to Esri Map
+            esriMap(arrPoint);
+          }
+        });
+      }
+      
+      /** Diplay Esri GIS Map **/
+      function esriMap(arrPoint) {
+        require(["esri/config","esri/Map", "esri/views/MapView", "esri/Graphic", "esri/layers/GraphicsLayer", "esri/geometry/Multipoint", "esri/layers/FeatureLayer", "esri/geometry/Point", "dojo/domReady!"], 
+        
+        function (esriConfig, Map, MapView, Graphic, GraphicsLayer, Point) {  
+          esriConfig.apiKey = "/**YOURAPIKEY**/";
+          
+          // Base Map Setting
+          var map = new Map({
+            basemap: "dark-gray-vector" // Basemap layer service
+          });
+          var graphicsLayer = new GraphicsLayer();
+          map.add(graphicsLayer);
+
+          for(var i=0;i<Object.keys(arrPoint).length;i++) {  // Create Multiple Points
+            console.log("Point Added to Esri Map : "+ arrPoint[i].name);
+            console.log(arrPoint[i])
+            // Configure Point Geometry
+            var point = { 
+              type: "point",
+              longitude: arrPoint[i].longitude,
+              latitude: arrPoint[i].latitude
+            };
+            // Configure Pop-Up to Show Place Name
+            var popupTemplate = {
+              title: arrPoint[i].name
+            };
+            // Configure Point Symbol Style
+            const simpleMarkerSymbol = {
+              type: "simple-marker",
+              color: [226, 119, 40],  // Orange
+              outline: {
+                color: [255, 255, 255], // White
+                width: 1
+              }
+            };
+            // Configure for Display
+            const pointGraphic = new Graphic({
+              geometry: point,
+              symbol: simpleMarkerSymbol,
+              popupTemplate: popupTemplate
+            });
+            graphicsLayer.add(pointGraphic);
+          }
+
+          //Display Map
+          var view = new MapView({
+            map: map,
+            center: [point.longitude, point.latitude], // Longitude, latitude
+            zoom: 13, // Zoom level
+            container: "viewDiv" // Div element
+          });        
+        }
+        );
+      }
+    </script>
+
+    <!--Div Elements -->
+    <div id="map"></div> 
+    <div id="viewDiv"></div>
+
+  </body>
+</html>

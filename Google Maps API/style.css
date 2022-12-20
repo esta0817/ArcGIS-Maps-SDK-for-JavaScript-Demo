@@ -1,0 +1,21 @@
+/**
+ * @license
+ * Copyright 2019 Google LLC. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/* [START maps_add_map] */
+/* Set the size of the div element that contains the map */
+#map {
+    height: 0px;
+    /* The height is 400 pixels */
+    width: 0px;
+    /* The width is the width of the web page */
+  }
+  
+  #viewDiv {
+    /*padding: 0;
+    margin: 0;*/
+    height: 100%;
+    width: 100%;
+  }
+  /* [END maps_add_map] */
