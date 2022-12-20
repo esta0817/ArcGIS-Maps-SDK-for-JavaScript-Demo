@@ -1,0 +1,131 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>ArcGIS Maps SDK for JavaScript Demo: Using Statistics Korea API</title>
+  <style>
+    html,
+    body,
+    #viewDiv {
+      padding: 0;
+      margin: 0;
+      height: 100%;
+      width: 100%;
+    }
+  </style>
+
+  <!--ArcGIS Maps SDK for JS Import -->
+  <link rel="stylesheet" href="https://js.arcgis.com/4.25/esri/themes/light/main.css">
+  <script src="https://js.arcgis.com/4.25/"></script>
+
+
+  <script>
+    function getCensusToken(){
+        // Set access token parameter
+        const consumer_key = "5669d3891a5544b99708"; //서비스 ID
+        const consumer_secret = "0ce70d4bdf704a43a45d"; //서비스 Secret
+        const tokenURL = "https://sgisapi.kostat.go.kr/OpenAPI3/auth/authentication.json?"+"consumer_key="+consumer_key+"&consumer_secret="+consumer_secret;
+
+        return fetch(tokenURL).then(function(response){
+            return response.json();
+        })
+    }
+    function getCensusData(token){
+        // Set Census Query parameter
+        const year = 2021
+        const admin_cd = 11
+        const low_search = 2
+        const dataURL = 'https://sgisapi.kostat.go.kr/OpenAPI3/stats/population.json'+'?accessToken='+token+"&year="+year+"&adm_cd="+admin_cd+"&low_search="+low_search;
+
+        return fetch(dataURL).then(function(response){
+            return response.json();
+        })
+    }
+
+    function displayMap(censusData){
+        require([
+        "esri/config",
+        "esri/Map",
+        "esri/views/MapView",
+        "esri/layers/FeatureLayer"
+        
+        ], function (esriConfig,Map, MapView, FeatureLayer) {
+            // API Setting 
+            esriConfig.apiKey = "AAPK6dfb0fa654994a98ab90a451c294ec42ZtO2IHPatGpaxMu0i5Eh8qZzvzfX9CMjPymvHPjatlRgJR5hdhM1ClxcbnTC_umy";
+
+            // Layer Setting
+            const seoulLayer = new FeatureLayer({
+                url: "https://services8.arcgis.com/N26pHlujTbS3jL7P/arcgis/rest/services/seoul_boundary_dong/FeatureServer/0"
+            });
+
+            const map = new Map({
+                basemap: "arcgis-newspaper" // Basemap layer *https://developers.arcgis.com/javascript/latest/api-reference/esri-Map.html
+            });
+
+            map.add(seoulLayer)
+
+
+            const view = new MapView({
+                map: map,
+                center: [126.9784147, 37.5666805],
+                zoom: 11, // scale: 72223.819286
+                container: "viewDiv",
+                constraints: {
+                snapToZoom: false
+                }
+            });
+
+            /** Configuring Census Popup **/
+            const popupTemplate = {
+                title: "Census Data in {ADM_NM}",
+                outFields: ["*"],
+                content: censusPopup,
+            };
+            seoulLayer.popupTemplate = popupTemplate;
+
+            function censusPopup(feature){
+                var selectedCode = feature.graphic.attributes.ADM_CD;
+                console.log("Code of Selected Area:", selectedCode);
+
+                var censusSelected = censusData.filter(function(e){ // Find index of same "ADM_CD" value
+                    return Number(e.adm_cd) === selectedCode
+                })
+                console.log("Census data of Selected Area:",censusSelected[0]);
+
+                // Configure Popup Contents
+                const div = document.createElement("div");
+                div.innerHTML = 
+                "<style>ul{line-height: 2em;}</style>"+
+                "<ul>"+
+                    "<li>선택한 지역(Selected Area): "+censusSelected[0].adm_nm+"</li>"+
+                    "<li>총 인구 수(Total Population): "+censusSelected[0].tot_ppltn+"명"+"</li>"+
+                    "<li>평균 나이(Average Age): "+censusSelected[0].avg_age+"세"+"</li>"+
+                    "<li>인구 밀도(Population Density): "+censusSelected[0].ppltn_dnsty+"명/㎢"+"</li>"+
+                    "<li>노령화 지수(Aging Index): "+censusSelected[0].aged_child_idx+"</li>"+
+                    "<li>총 가구수(Total Family): "+censusSelected[0].tot_family+"</li>"+
+                "</ul>"
+                return div;
+            }
+        });
+    }
+  </script>
+</head>
+
+<body>
+    <script>
+        async function init(){
+            var tokenResponse = await getCensusToken();
+            token = tokenResponse.result.accessToken;
+            console.log("Access Token:", token);
+
+            var dataResponse = await getCensusData(token);
+            await displayMap(dataResponse.result)
+        }
+        init()
+        
+    </script>
+
+    <div id="viewDiv"></div>
+</body>
+
+</html>
