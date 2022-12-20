@@ -1,0 +1,411 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>LotteGRS Location Analysis Demo</title>
+    
+    <!--Chart Import -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js" integrity="sha512-ElRFoEQdI5Ht6kZvyzXhYG9NqjtkmlkfYk0wr6wHxU9JEHakS7UJZNeml5ALk+8IKlU6jDgMabC3vkumRokgJA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <!--ArcGIS Map Import -->
+    <link rel="stylesheet" href="https://js.arcgis.com/4.24/esri/themes/light/main.css">
+    <script src="https://js.arcgis.com/4.24/"></script>
+
+    
+
+    <!--CSS Import-->
+    <link rel="stylesheet" type="text/css" href="./style.css" />
+
+    
+  </head>
+  <body>
+
+    <script>
+      /** Diplay Esri GIS Map **/
+    function esriMap(inputData, popSum) {
+      require([
+        "esri/config",
+        "esri/Map", //WebMap 사용을 위해서는 Disable 필요
+        //"esri/WebMap",
+        "esri/views/MapView",
+        "esri/widgets/ScaleBar",
+        "esri/widgets/Legend",
+        "esri/layers/FeatureLayer",
+        "esri/rest/serviceArea",
+        "esri/rest/support/ServiceAreaParameters",
+        "esri/rest/support/FeatureSet",
+        "esri/Graphic",
+        "esri/layers/GraphicsLayer",
+        "esri/widgets/Sketch",
+        "esri/geometry/geometryEngine",
+        "esri/widgets/Popup"
+        ], function(esriConfig, Map, MapView, ScaleBar, Legend, FeatureLayer, serviceArea, ServiceAreaParams, FeatureSet, Graphic, GraphicsLayer, Sketch, geometryEngine, Popup) {
+        // Base Setting
+        esriConfig.apiKey = "<<Your API Key>>";    
+        esriConfig.portalUrl = "https://portal.esrikr.com/portal"; 
+
+        // Layer Setting
+        const seoul_boundary = new FeatureLayer({
+          url: "https://portal.esrikr.com/arcgis/rest/services/Hosted/Seoul_Boundary_with_Code_WFL1/FeatureServer"
+        })
+        const lotteria = new FeatureLayer({
+          url: "https://portal.esrikr.com/arcgis/rest/services/Hosted/Lotteria_Seoul/FeatureServer"
+        })
+        const mcdonalds = new FeatureLayer({
+          url: "https://portal.esrikr.com/arcgis/rest/services/Hosted/Mcdonalds_Seoul/FeatureServer"
+        })
+        const burgerking = new FeatureLayer({
+          url: "https://portal.esrikr.com/arcgis/rest/services/Hosted/BurgerKing_Seoul/FeatureServer"
+        })
+        const momstouch = new FeatureLayer({
+          url: "https://portal.esrikr.com/arcgis/rest/services/Hosted/MomsTouch_Seoul/FeatureServer"
+        })
+        
+        /**  Map initailize **/
+        const map = new Map({
+          basemap: "gray-vector",
+          layers: [seoul_boundary, lotteria, mcdonalds, burgerking, momstouch]
+        });
+        //Display Map
+        const view = new MapView({
+            container: "viewDiv",
+            map: map,
+            center: [127.0016, 37.5642],
+            zoom : 10,
+            padding:{right:450}
+        });
+        // Make scalebar
+        const scalebar = new ScaleBar({
+            view: view
+        });
+        view.ui.add(scalebar, "top-left");
+        // Make Legend
+        let legend = new Legend({
+          view: view
+        });
+        view.ui.add(legend, "bottom-left")        
+
+        /** Analysis Function **/
+        // Add a point Graphic when Click Map
+        view.on("click", function(event){
+          const locationGraphic = createGraphic(event.mapPoint);
+
+          /** Solve Service Area or Buffer**/
+          const mode = document.getElementsByName("mode_info");
+          const inputNumber = document.getElementById("inputNumber").value
+          const element = document.getElementById("DriveTime");
+          if(mode[0].checked){ // Buffer Mode
+            createBuffer(locationGraphic, inputNumber);
+            element.innerHTML = "# Buffer Size : " + inputNumber + " kilometers";
+          }
+          if(mode[1].checked){ // Service Area Mode
+            // Define the service url
+            const serviceAreaUrl = "https://route-api.arcgis.com/arcgis/rest/services/World/ServiceAreas/NAServer/ServiceArea_World/solveServiceArea";
+            // Set Service Area Parameters
+            const driveTimeCutoffs = inputNumber; // Minutes ex)[3,5,10]
+            const serviceAreaParams = createServiceAreaParams(locationGraphic, driveTimeCutoffs, view.spatialReference); 
+            // Service Area Solve and show Drive Time in Sidewindow
+            solveServiceArea(serviceAreaUrl,serviceAreaParams); 
+            element.innerHTML = "# Drive Time : " + driveTimeCutoffs + " min";
+          }
+        });
+
+        // Create a point Graphic when click the Map
+        function createGraphic(point){
+          view.graphics.removeAll();
+          const graphic = new Graphic({
+            geometry: point,
+            symbol:{
+              type: "simple-marker",
+              color:"white",
+              size: 10
+            }
+          });
+          view.graphics.add(graphic)
+          return graphic;
+        }
+
+        // Create buffer Graphic
+        let bufferGraphic;
+        function createBuffer(pointGraphic, value){
+          const buffer = geometryEngine.geodesicBuffer(
+            pointGraphic.geometry, value, "kilometers"
+          );
+          bufferGraphic = new Graphic({
+            geometry: buffer,
+            symbol:{
+              type:"simple-fill",
+              color:[227,130,79,0.1],
+              outline:{
+                color:[0,0,0,255]
+              },
+            },
+          });
+          view.graphics.add(bufferGraphic);
+          findIntersect(buffer); // Find Intersect
+        }
+
+        // Create Service area parameters
+        function createServiceAreaParams(locationGraphic, driveTimeCutoffs, outSpatialReference){
+          // Create location to solve
+          const featureSet = new FeatureSet({
+            features:[locationGraphic]
+          });
+          // Set all of the input parameters for the service
+          const taskParameters = new ServiceAreaParams({
+            facilities: featureSet,
+            defaultBreaks: driveTimeCutoffs,
+            trimOuterPolygon: true,
+            outSpatialReference: outSpatialReference
+          });
+          return taskParameters;
+        }
+        // Solve Service Area from createServiceAreaParams()
+        function solveServiceArea(url, serviceAreaParams){
+          return serviceArea.solve(url, serviceAreaParams)
+          .then(function(result){
+            if(result.serviceAreaPolygons.length){
+              result.serviceAreaPolygons.forEach(function(graphic){
+                graphic.symbol = {
+                  type: "simple-fill",
+                  color: "rgba(50,50,255,.25)"
+                }
+                view.graphics.add(graphic,0);
+                findIntersect(graphic.geometry) // Find Intersect
+              })
+            }
+          }, function(error){
+            console.log("Service Area Error: ",error)
+          })
+        }
+        // Show Spatial Analysis Result in Panel
+        function showSpatialRelationship(string, value){
+          const element = document.getElementById(string)
+          if(value){
+            element.innerHTML = "<b>" + string + " count: " + value + "</b>";
+          } else{
+            element.innerHTML = string + " count: " + value;
+          }
+        }
+
+        // Intersect Analysis UI
+        const relationshipDiv = document.getElementById("relationshipResults");
+        //view.ui.add(relationshipDiv, "bottom-right");
+
+        // find Intersect : Service Area Polygon and Burger Store
+        function findIntersect(geometry){
+          const parcelQuery = {
+            spatialRelationship:"intersects",
+            geometry:geometry,
+            returnGeometry: true
+          };
+          mcdonalds.queryFeatures(parcelQuery).then((result)=>{
+            showSpatialRelationship("Mcdonalds", result.features.length)
+          }).catch((error)=>{
+            console.log("Intersect Query Error: ", error);
+          });
+          momstouch.queryFeatures(parcelQuery).then((result)=>{
+            showSpatialRelationship("Momstouch", result.features.length)
+          }).catch((error)=>{
+            console.log("Intersect Query Error: ", error);
+          });
+          burgerking.queryFeatures(parcelQuery).then((result)=>{
+            showSpatialRelationship("Burgerking", result.features.length)
+          }).catch((error)=>{
+            console.log("Intersect Query Error: ", error);
+          });
+          lotteria.queryFeatures(parcelQuery).then((result)=>{
+            showSpatialRelationship("Lotteria", result.features.length)
+          }).catch((error)=>{
+            console.log("Intersect Query Error: ", error);
+          });
+          
+        }
+
+        /** Get Census Pop up**/
+        // Configure Popup Action and template
+        const findThisAction = {
+          title: "See Census Chart",
+          id: "find-this",
+        };    
+        
+        const template = {
+          title: "Census Data in {resc_ct_nm}",
+          outFields: ["*"],
+          content: censusPopup,
+          fieldInfos:[
+                {
+                  fieldName: "sk_code",
+                  label:"Statistics Korea_Code",
+                },
+                {
+                  fieldName: "RESD_Code",
+                  label:"SiGunGu_Code"
+                },
+                {
+                  fieldName: "area",
+                  label:"Area(km2)"
+                }
+              ],
+          actions : [findThisAction]
+        };
+        seoul_boundary.popupTemplate = template;
+
+        var index; //Storage index of Cesus Data Array
+        function censusPopup(feature){
+          const div = document.createElement("div");
+          var selectedCode = Number(feature.graphic.attributes.sk_code);
+
+          for(index=0;index<inputData.length;index++){ //Finding Index of Census Data 
+            if(selectedCode === Number(inputData[index].adm_cd)){
+              break;
+            } 
+          }
+          div.innerHTML = 
+          "<style>ul{line-height: 2em;}</style>"+
+          "<ul>"+
+            "<li>선택한 지역(Selected Area): "+inputData[index].adm_nm+"</li>"+
+            "<li>총 인구 수(Total Population): "+inputData[index].tot_ppltn+"명"+"</li>"+
+            "<li>평균 나이(Average Age): "+inputData[index].avg_age+"세"+"</li>"+
+            "<li>인구 밀도(Population Density): "+inputData[index].ppltn_dnsty+"명/㎢"+"</li>"+
+            "<li>노령화 지수(Aging Index): "+inputData[index].aged_child_idx+"</li>"+
+            "<li>총 가구수(Total Family): "+inputData[index].tot_family+"</li>"+
+          "</ul>"
+          return div;
+        }
+
+        // Function to show Cennsus Data
+        function showCensusChart(popSum){
+          const ctx = document.getElementById('censusChart');
+          const help = document.getElementById('censusHelp');
+          help.innerHTML = "";
+
+          Chart.defaults.color = "white"
+          Chart.defaults.font.size = 14;
+          var censusChart;
+          let chartStatus = Chart.getChart("censusChart"); // <canvas> id
+          if (chartStatus != undefined) {
+            chartStatus.destroy();
+          }
+          censusChart= new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: [inputData[index].adm_nm, 'Average of Seoul'],
+                
+                datasets: [{
+                  label: '# of Population(2020)',
+                  data: [inputData[index].tot_ppltn, popSum/inputData.length],
+                  
+                  backgroundColor: [
+                      'rgba(255, 99, 132, 0.2)',
+                      'rgba(54, 162, 235, 0.2)',
+
+                  ],
+                  borderColor: [
+                      'rgba(255, 99, 132, 1)',
+                      'rgba(54, 162, 235, 1)',
+
+                  ],
+                  borderWidth: 1
+                }]
+              },
+          });
+        };
+        // Popup Click Action
+        view.popup.on("trigger-action", (event) => {
+          if(event.action.id === "find-this"){showCensusChart(popSum)}
+        });
+
+      });
+    }
+    </script>
+
+    <script>
+      function getAuthToken(){
+        var consumer_key='<<Your Service ID>>'; //서비스 ID
+        var consumer_secret='<<Your Secure Key>>'; //보안 Key
+        // Configure URL 
+        var authenticationURL = 'https://sgisapi.kostat.go.kr/OpenAPI3/auth/authentication.json'+'?consumer_key='+consumer_key+'&consumer_secret='+consumer_secret;
+        // Get accessToken from SGIS OAuth
+        fetch(authenticationURL)
+        .then(function(response){
+          response.json().then(function(promiseResult){
+            AuthToken = promiseResult.result.accessToken
+            console.log("AuthToken: ", AuthToken);
+            getData(AuthToken, '2020');
+          })
+        })
+        .catch(function(reason){
+          console.log("getAuthToken Error Reason: ", reason);
+        })
+      }
+
+      function getData(AuthToken, year){
+        // Configure URL
+        var accessToken = AuthToken;
+        var admin_cd = 11
+        var low_search = 1
+        var getDataURL = 'https://sgisapi.kostat.go.kr/OpenAPI3/stats/population.json'+'?accessToken='+accessToken+"&year="+year+"&adm_cd="+admin_cd+"&low_search="+low_search;
+        // Get Data from SGIS Population Service
+        fetch(getDataURL)
+        .then(function(response){
+          response.json().then(function(promiseResult){
+            var SGISData = promiseResult.result;
+            var popSum = 0 // Sum of total Population
+            for(var index=0;index<SGISData.length;index++){
+              popSum += Number(SGISData[index].tot_ppltn);
+            }
+            esriMap(SGISData, popSum); //Display Esri Map
+          })
+        })
+        .catch(function(reason){
+          console.log("getData Error Reason: ", reason);
+        })
+
+        
+      }
+    </script>
+
+    <script>
+      //Call functions
+      getAuthToken(); //get Accesstoken and Data from SGIS, EsriMap
+      
+    </script>
+    
+    <!--Div Elements -->
+    <div id="title">LotteGRS Location Analysis</div> 
+    
+    <div id="viewDiv">
+      <div id="contents" class="esri-widget">
+        <div id="relationshipResults">
+          <div id="text">
+            <div style="font-size:1.2em"><b>Number of Burger Stores in Selected Area</b></div>
+            1. Select Mode
+            <div id="mode">
+              <input type="radio" name="mode_info" value="buffer" checked="checked">Buffer
+              <input type="radio" name="mode_info" value="serviceArea">Service Area
+            </div>
+            2. Set Search Value: <input type="number" min="0" value="3" id="inputNumber"><br>
+            <div id="DriveTime">#</div>
+            <ul>
+              <li><div id="Lotteria">Lotteria count : </div></li>
+              <li><div id="Mcdonalds">Mcdonalds count : </div></li>
+              <li><div id="Burgerking">Burgerking count : </div></li>
+              <li><div id="Momstouch">Momstouch count : </div></li>
+            </ul>
+          </div>
+        </div>
+      <div id="census">
+        <div id="text">
+          <div style="font-size:1.2em"><b>Census Chart of Selected Area</b></div>
+          <div id ='censusHelp'>Please Click "See Census Chart" in Layer's Pop-up.</div>
+          <canvas id="censusChart"></canvas>
+          
+        </div>
+      </div>
+      </div>
+    </div>
+
+
+  </body>
+</html>

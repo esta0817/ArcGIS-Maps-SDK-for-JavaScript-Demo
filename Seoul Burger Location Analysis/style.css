@@ -1,0 +1,45 @@
+#title{
+  height: 2em;
+  line-height: 2em;
+  font-size: 2em;
+  text-align: center;
+  background: #dc143c;
+  color: white;
+  font-family: Georgia, "Times New Roman", serif;
+
+}
+
+#viewDiv {
+  padding: 0;
+  margin-top: 0.5em;
+  height: 90%;
+  width: 100%;
+
+  }
+
+#contents {
+  line-height: 2em;
+  padding: 10px;
+  z-index: 99;
+  position: absolute;
+  top: 10%;
+  right: 0;
+  height: 85%;
+  background: rgba(0, 0, 0, 0.5);
+  width: 450px;
+}
+
+#text{
+  color: white;
+  padding: 3%;
+  font-size : 1.2em;
+  line-height: 2em;
+}
+
+#inputNumber{
+  width: 3em;
+}
+
+.esri-view .esri-popup__button.esri-popup__button--dock {
+  display: none;
+}
