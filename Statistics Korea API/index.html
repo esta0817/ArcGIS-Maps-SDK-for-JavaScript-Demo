@@ -1,0 +1,168 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>ArcGIS JavaScript API and SGIS API</title>
+    
+    <!--ArcGIS Map Import -->
+    <link rel="stylesheet" href="https://js.arcgis.com/4.24/esri/themes/light/main.css">
+    <script src="https://js.arcgis.com/4.24/"></script>
+
+    <!--CSS Import-->
+    <link rel="stylesheet" type="text/css" href="./style.css" />
+  </head>
+  <body>
+
+    <script>
+      /** Diplay Esri GIS Map **/
+      function esriMap(inputData) {
+        require([
+        "esri/config",
+        "esri/Map", //WebMap 사용을 위해서는 Disable 필요
+        //"esri/WebMap",
+        "esri/views/MapView",
+        "esri/widgets/ScaleBar",
+        "esri/widgets/Legend",
+        "esri/layers/FeatureLayer"
+        ], function(esriConfig, Map, MapView, ScaleBar, Legend, FeatureLayer) {
+        //Base Setting
+        esriConfig.apiKey = "YourAPIKEY";        
+        esriConfig.portalUrl = "https://portal.esrikr.com/portal"; 
+
+        const featureLayer = new FeatureLayer({
+          url: "https://portal.esrikr.com/arcgis/rest/services/Hosted/Seoul_Boundary_with_Code_WFL1/FeatureServer"
+          //popupTemplate: template
+        })
+        const map = new Map({
+          basemap: "gray-vector",
+          layers: [featureLayer]
+        });
+        // Base Map Setting
+        /*
+        const webmap = new WebMap({
+        portalItem: {
+            id: "67d44e6a0c864d96ae747fe6ae7cb8ae"
+            }
+        });
+        */
+
+        //Display Map
+        const view = new MapView({
+            container: "viewDiv",
+            map: map,
+            center: [127.0016, 37.5642],
+            zoom : 10
+        });
+
+        // Make scalebar
+        const scalebar = new ScaleBar({
+            view: view
+        });
+        view.ui.add(scalebar, "bottom-left");
+        
+        const findThisAction = {
+          title: "See Census Data",
+          id: "find-this",
+        };    
+        
+        // Configure Popup
+        const template = {
+          title: "{resc_ct_nm}",
+          content: [
+            {
+              type:"fields",
+              fieldInfos:
+              [
+                {
+                  fieldName: "sk_code",
+                  label:"Statistics Korea_Code"
+                },
+                {
+                  fieldName: "RESD_Code",
+                  label:"SiGunGu_Code"
+                },
+                {
+                  fieldName: "area",
+                  label:"Area(km2)"
+                }
+              ]
+            }
+          ],
+          actions : [findThisAction]
+        };
+        featureLayer.popupTemplate = template;
+
+        function getCensusPopup(inputData){
+          selectedCode = Number(view.popup.selectedFeature.attributes.sk_code)
+          console.log("getCensusPopup() called with code : ", selectedCode)
+          //console.log(inputData)
+          for(var index=0;index<inputData.length;index++){
+            if(selectedCode === Number(inputData[index].adm_cd)){
+              view.popup.content = inputData[index].adm_nm+"는 총 "+inputData[index].tot_ppltn+"명이며, 평균 나이는 "+inputData[index].avg_age+"세입니다.";
+              break;
+            } 
+          }
+        };
+
+        view.popup.on("trigger-action", (event) => {
+          if(event.action.id === "find-this")
+            {getCensusPopup(inputData)}
+          });
+        });
+      }
+    </script>
+
+    <script>
+      function getAuthToken(){
+        var consumer_key='YourAPIKEY'; //서비스 ID
+        var consumer_secret='YourAPIKEY'; //보안 Key
+        // Configure URL 
+        var authenticationURL = 'https://sgisapi.kostat.go.kr/OpenAPI3/auth/authentication.json'+'?consumer_key='+consumer_key+'&consumer_secret='+consumer_secret;
+        // Get accessToken from SGIS OAuth
+        fetch(authenticationURL)
+        .then(function(response){
+          response.json().then(function(promiseResult){
+            AuthToken = promiseResult.result.accessToken
+            console.log("AuthToken: ", AuthToken);
+            getData(AuthToken);
+          })
+        })
+        .catch(function(reason){
+          console.log("getAuthToken Error Reason: ", reason);
+        })
+      }
+
+      function getData(AuthToken){
+        // Configure URL
+        var accessToken = AuthToken;
+        var year = 2020
+        var admin_cd = 11
+        var low_search = 1
+        var getDataURL = 'https://sgisapi.kostat.go.kr/OpenAPI3/stats/population.json'+'?accessToken='+accessToken+"&year="+year+"&adm_cd="+admin_cd+"&low_search="+low_search;
+        // Get Data from SGIS Population Service
+        fetch(getDataURL)
+        .then(function(response){
+          response.json().then(function(promiseResult){
+            var SGISData = promiseResult.result
+            esriMap(SGISData);
+          })
+        })
+        .catch(function(reason){
+          console.log("getData Error Reason: ", reason);
+        })
+      }
+    </script>
+
+    <script>
+      //Call functions
+      getAuthToken(); //get Accesstoken and Data from SGIS, EsriMap
+      
+    </script>
+
+    <!--Div Elements -->
+    <div id="map"></div> 
+    <div id="viewDiv"></div>
+  
+
+  </body>
+</html>
